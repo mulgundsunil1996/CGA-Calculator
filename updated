@@ -1,0 +1,116 @@
+# pma_cga_calculator_ddmmyyyy.py
+import streamlit as st
+from datetime import datetime, timedelta
+import pandas as pd
+
+st.set_page_config(page_title="PMA & Corrected Age Calculator", layout="centered")
+
+# Title
+st.title("PMA & Corrected Age Calculator for Preterm Infants")
+
+st.markdown(
+    """
+    - **PMA (Postmenstrual Age)** = Gestational age at birth + days since birth  
+    - **Corrected Age** = Corrected Gestational Age (CGA) is the chronological age of a preterm infant adjusted for prematurity by subtracting the number of weeks born before 40 weeks gestation- 
+    Formula ->
+    CGA (weeks)=Chronological Age−(40−GA at birth)
+    """
+)
+
+# Inputs
+dob = st.date_input("Date of Birth (DOB)")
+ga_weeks = st.number_input("Gestational Age at Birth (Weeks)", min_value=20, max_value=45, value=28)
+ga_days = st.number_input("Gestational Age at Birth (Days)", min_value=0, max_value=6, value=3)
+current_date = st.date_input("Current Date", value=datetime.today().date())
+
+# Basic calculations
+day_of_life = (current_date - dob).days
+
+if day_of_life < 0:
+    st.error("Current Date cannot be before Date of Birth.")
+else:
+    # GA at birth in days
+    ga_birth_days = ga_weeks * 7 + ga_days
+
+    # ---------------------------
+    # 1. PMA (Postmenstrual Age)
+    # ---------------------------
+    pma_total_days = ga_birth_days + day_of_life
+    pma_weeks = pma_total_days // 7
+    pma_days = pma_total_days % 7
+
+    # ---------------------------
+    # 2. Corrected Age
+    # ---------------------------
+    TERM_DAYS = 40 * 7  # 280 days
+
+    days_premature = TERM_DAYS - ga_birth_days  # how many days early
+    # Corrected age in days = chronological age - days_premature
+    corrected_age_days = day_of_life - days_premature
+
+    if corrected_age_days < 0:
+        corrected_age_days = 0  # not yet reached term: corrected age taken as 0
+
+    ca_weeks = corrected_age_days // 7
+    ca_days = corrected_age_days % 7
+
+    # Approx chronological age in weeks + days (just for display)
+    chron_weeks = day_of_life // 7
+    chron_days = day_of_life % 7
+
+    st.markdown("---")
+    st.subheader("Result")
+
+    st.write(f"**Day of Life (DOL):** {day_of_life} days "
+             f"({chron_weeks} weeks {chron_days} days)")
+
+    st.write(f"**PMA (Postmenstrual Age):** {pma_weeks} weeks {pma_days} days")
+
+    st.write(
+        f"**Corrected Age (for growth & development):** "
+        f"{ca_weeks} weeks {ca_days} days"
+    )
+
+    # Extra info: Due Date / Term Date
+    edd = dob + timedelta(days=days_premature)  # Approx EDD at 40 weeks
+    st.write(f"**Approximate Due Date (40 weeks):** {edd.strftime('%d/%m/%Y')}")
+
+    # Option: Generate daily table
+    show_table = st.checkbox("Show Daily PMA & Corrected Age Table (Day 0 → Current Day)")
+    if show_table:
+        data = []
+        for i in range(day_of_life + 1):
+            date_i = dob + timedelta(days=i)
+            # PMA at day i
+            pma_i_days = ga_birth_days + i
+            pma_i_weeks = pma_i_days // 7
+            pma_i_extra_days = pma_i_days % 7
+
+            # Corrected age at day i
+            ca_i_days = i - days_premature
+            if ca_i_days < 0:
+                ca_i_days = 0
+            ca_i_weeks = ca_i_days // 7
+            ca_i_extra_days = ca_i_days % 7
+
+            data.append(
+                {
+                    "Day of Life": i,
+                    "Date": date_i.strftime("%d/%m/%Y"),
+                    "PMA Weeks": pma_i_weeks,
+                    "PMA Days": pma_i_extra_days,
+                    "Corrected Age Weeks": ca_i_weeks,
+                    "Corrected Age Days": ca_i_extra_days,
+                }
+            )
+
+        df = pd.DataFrame(data)
+        st.dataframe(df, use_container_width=True)
+
+        # Download table
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("Download CSV", csv, "PMA_CorrectedAge_table.csv", "text/csv")
+
+# Footer
+st.markdown("---")
+st.markdown("<p style='text-align: center;'>Created by Dr. Sunil Mulgund</p>", unsafe_allow_html=True)
